@@ -25,10 +25,10 @@ FILE = "prices.csv"
 # ----------------------------
 def generate_price(origin, dest):
     base = 60 + (len(origin) * 7) + (len(dest) * 6)
-    return max(45, base + random.randint(-15, 35))
+    return max(45, base + random.randint(-20, 40))
 
 # ----------------------------
-# carica storico
+# storico prezzi
 # ----------------------------
 history = {}
 if os.path.exists(FILE):
@@ -44,22 +44,27 @@ for o in airports[:3]:
 
         route = f"{o}->{d}"
         price = generate_price(o, d)
-
         old_price = history.get(route)
 
-        trend = ""
-        if old_price:
-            if price < old_price:
-                trend = "📉 sceso"
-            elif price > old_price:
-                trend = "📈 salito"
+        # ----------------------------
+        # LOGICA DECISIONALE
+        # ----------------------------
+        if old_price is None:
+            decision = "🆕 nuovo monitoraggio"
+        else:
+            diff = price - old_price
+
+            if diff <= -10:
+                decision = "🟢 conviene aspettare"
+            elif diff >= 10:
+                decision = "🔴 possibile momento di prenotare"
             else:
-                trend = "➡️ stabile"
+                decision = "🟡 stabile"
 
         flights.append({
             "route": route,
             "price": price,
-            "trend": trend
+            "decision": decision
         })
 
         history[route] = price
@@ -72,11 +77,13 @@ with open(FILE, "w", newline="") as f:
 
 best = min(flights, key=lambda x: x["price"])
 
-msg = "✈️ Travel Agent Report\n\n"
+msg = "✈️ Travel Agent AI Report\n\n"
 msg += f"🏆 MIGLIORE OFFERTA:\n{best['route']} — {best['price']} €\n\n"
 
-msg += "📊 Dettaglio:\n"
+msg += "📊 ANALISI:\n"
 for f in sorted(flights, key=lambda x: x["price"]):
-    msg += f"- {f['route']}: {f['price']} € {f['trend']}\n"
+    msg += f"- {f['route']}: {f['price']} € {f['decision']}\n"
+
+msg += "\n🤖 Consiglio automatico attivo"
 
 send_message(msg)
