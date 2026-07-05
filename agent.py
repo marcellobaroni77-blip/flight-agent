@@ -1,5 +1,4 @@
 import os
-import json
 import requests
 import csv
 import random
@@ -12,25 +11,27 @@ def send(msg):
     requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
 # ----------------------------
-# HUB NORD ITALIA
+# AEROPORTI NORD ITALIA
 # ----------------------------
 airports = ["BLQ", "VRN", "VCE", "BGY", "MXP"]
 
-# EUROPA CAPODANNO
+# ----------------------------
+# DESTINAZIONI CAPODANNO EUROPA
+# ----------------------------
 destinations = {
-    "LON": {"name": "Londra", "base": 140, "demand": 9},
-    "PAR": {"name": "Parigi", "base": 150, "demand": 10},
-    "AMS": {"name": "Amsterdam", "base": 160, "demand": 10},
-    "BCN": {"name": "Barcellona", "base": 120, "demand": 7},
-    "PRG": {"name": "Praga", "base": 110, "demand": 8},
-    "VIE": {"name": "Vienna", "base": 120, "demand": 8},
-    "ATH": {"name": "Atene", "base": 100, "demand": 6},
+    "LON": {"name": "Londra", "base": 140},
+    "PAR": {"name": "Parigi", "base": 150},
+    "AMS": {"name": "Amsterdam", "base": 160},
+    "BCN": {"name": "Barcellona", "base": 120},
+    "PRG": {"name": "Praga", "base": 110},
+    "VIE": {"name": "Vienna", "base": 120},
+    "ATH": {"name": "Atene", "base": 100},
 }
 
 FILE = "history.csv"
 
 # ----------------------------
-# prezzo realistico (range, non fisso)
+# PREZZO SIMULATO REALISTICO CAPODANNO
 # ----------------------------
 def price_model(origin, dest):
     airport_factor = {
@@ -40,22 +41,26 @@ def price_model(origin, dest):
     base = airport_factor.get(origin, 75)
     base += destinations[dest]["base"]
 
-    # CAPODANNO = forte volatilità
-    volatility = random.randint(20, 140)
+    # Capodanno = alta domanda
+    volatility = random.randint(30, 140)
 
     return base + volatility
 
 # ----------------------------
-# storico
+# CARICA STORICO
 # ----------------------------
 history = {}
 if os.path.exists(FILE):
     with open(FILE, "r") as f:
-        for row in csv.reader(f):
+        reader = csv.reader(f)
+        for row in reader:
             history[row[0]] = int(row[1])
 
 results = []
 
+# ----------------------------
+# ANALISI ROTTE
+# ----------------------------
 for o in airports:
     for d in destinations:
 
@@ -63,69 +68,61 @@ for o in airports:
         price = price_model(o, d)
         old = history.get(route)
 
-        # trend reale
         if old is None:
-            trend = "🆕 nuovo monitoraggio"
+            trend = "🆕 nuovo"
         else:
             diff = price - old
             if diff <= -20:
-                trend = "🟢 in calo (buon segnale)"
+                trend = "🟢 in calo"
             elif diff >= 20:
-                trend = "🔴 in aumento (attenzione)"
+                trend = "🔴 in aumento"
             else:
                 trend = "🟡 stabile"
 
-        demand = destinations[d]["demand"]
-
-        # SCORE CAPODANNO (intelligenza reale)
-        score = (
-            demand * 2.5
-            - price / 80
-            + random.uniform(0, 1.5)
-        )
+        score = destinations[d]["base"] / 20 - price / 150 + random.uniform(0, 1)
 
         results.append({
             "route": route,
             "dest": destinations[d]["name"],
             "price": price,
-            "trend": trend,
-            "score": score
+            "score": score,
+            "trend": trend
         })
 
         history[route] = price
 
-# salva storico
+# ----------------------------
+# SALVA STORICO
+# ----------------------------
 with open(FILE, "w", newline="") as f:
     writer = csv.writer(f)
     for k, v in history.items():
         writer.writerow([k, v])
 
+# ----------------------------
+# MIGLIORE SCELTA
+# ----------------------------
 best = max(results, key=lambda x: x["score"])
 
-# ----------------------------
-# DECISIONE INTELLIGENTE
-# ----------------------------
-def advice(best):
-    if best["score"] > 9:
-        return "🟢 PRENOTA PRESTO (alta probabilità aumento)"
-    elif best["score"] > 7:
-        return "🟡 MONITORA MA DECIDI A BREVE"
+def advice(score):
+    if score > 9:
+        return "🟢 PRENOTA SUBITO (prezzi in salita)"
+    elif score > 7:
+        return "🟡 MONITORA ANCORA"
     else:
-        return "🔴 NON PRIORITARIO ORA"
+        return "🔴 NON URGENTE"
 
 # ----------------------------
-# OUTPUT MIGLIORATO (leggibile)
+# OUTPUT PULITO
 # ----------------------------
-
 msg = "🎆 CAPODANNO TRAVEL RADAR PRO 2026/2027\n\n"
 
-# 🏆 TOP 1
-msg += f"🏆 MIGLIOR SCELTA ASSOLUTA:\n"
-msg += f"{best['name']} ({best['route']})\n"
+msg += f"🏆 MIGLIOR SCELTA:\n"
+msg += f"{best['dest']} ({best['route']})\n"
 msg += f"💰 Prezzo stimato: {best['price']} €\n"
-msg += f"⭐ Score: {round(best['score'],2)}\n\n"
+msg += f"⭐ Score: {round(best['score'],2)}\n"
+msg += f"🧭 Consiglio: {advice(best['score'])}\n\n"
 
-# ✈️ PER AEROPORTO
 msg += "✈️ MIGLIORI OPZIONI PER AEROPORTO:\n"
 
 for o in airports:
@@ -135,9 +132,8 @@ for o in airports:
     subset = sorted(subset, key=lambda x: x["score"], reverse=True)[:3]
 
     for r in subset:
-        msg += f"- {r['dest']}: {r['price']} € | score {round(r['score'],1)}\n"
+        msg += f"- {r['dest']}: {r['price']} € | {r['trend']} | score {round(r['score'],1)}\n"
 
-# 🏆 TOP 5 GLOBALI
 msg += "\n🏆 TOP 5 COMPLESSIVO:\n"
 
 top5 = sorted(results, key=lambda x: x["score"], reverse=True)[:5]
@@ -145,4 +141,6 @@ top5 = sorted(results, key=lambda x: x["score"], reverse=True)[:5]
 for r in top5:
     msg += f"- {r['dest']} ({r['route']}): {r['price']} € | score {round(r['score'],1)}\n"
 
-msg += "\n🧭 Consiglio: Capodanno = prenota presto, i prezzi salgono rapidamente 📈"
+msg += "\n✈️ Nota: Capodanno = prezzi in aumento rapido, monitorare spesso 📈"
+
+send(msg)
