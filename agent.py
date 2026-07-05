@@ -16,7 +16,7 @@ def send(msg):
 airports = ["BLQ", "VRN", "VCE", "BGY", "MXP"]
 
 # ----------------------------
-# DESTINAZIONI CAPODANNO
+# DESTINAZIONI EUROPEE (CAPODANNO)
 # ----------------------------
 destinations = {
     "LON": {"name": "Londra", "base": 140},
@@ -31,7 +31,7 @@ destinations = {
 FILE = "history.csv"
 
 # ----------------------------
-# MODELLO PREZZO (simulazione realistica)
+# PREZZO SIMULATO
 # ----------------------------
 def price_model(origin, dest):
     airport_factor = {
@@ -41,7 +41,6 @@ def price_model(origin, dest):
     base = airport_factor.get(origin, 75)
     base += destinations[dest]["base"]
 
-    # Capodanno = alta volatilità
     return base + random.randint(30, 140)
 
 # ----------------------------
@@ -57,7 +56,7 @@ if os.path.exists(FILE):
 results = []
 
 # ----------------------------
-# ANALISI ROTTE
+# ANALISI
 # ----------------------------
 for o in airports:
     for d in destinations:
@@ -96,36 +95,27 @@ with open(FILE, "w", newline="") as f:
         writer.writerow([k, v])
 
 # ----------------------------
-# ALERT INTELLIGENTE
+# ORDINA RISULTATI
 # ----------------------------
 results_sorted = sorted(results, key=lambda x: x["score"], reverse=True)
 
 best = results_sorted[0]
-second = results_sorted[1]
-
-msg = ""
-
-if best["score"] > 8.5:
-
-    msg += "🟢 TRAVEL ALERT CAPODANNO\n\n"
-
-    msg += f"🏆 MIGLIORE SCELTA:\n{best['dest']} ({best['route']})\n"
-    msg += f"💰 Prezzo stimato: {best['price']} €\n"
-    msg += f"⭐ Score: {round(best['score'],2)}\n\n"
-
-    msg += f"🥈 ALTERNATIVA:\n{second['dest']} ({second['route']})\n"
-    msg += f"💰 Prezzo: {second['price']} €\n\n"
-
-    msg += "✈️ Consiglio: controlla subito queste rotte"
-
-elif best["score"] < 6:
-
-    msg += "🟡 TRAVEL UPDATE\n\n"
-    msg += "Nessuna opportunità forte oggi.\n"
-    msg += "👉 Continua a monitorare."
 
 # ----------------------------
-# INVIO SOLO SE UTILE
+# OUTPUT SEMPLICE E SICURO
 # ----------------------------
-if msg:
-    send(msg)
+msg = "🎆 CAPODANNO TRAVEL RADAR 2026/2027\n\n"
+
+msg += f"🏆 MIGLIOR SCELTA:\n"
+msg += f"{best['dest']} ({best['route']})\n"
+msg += f"💰 Prezzo stimato: {best['price']} €\n"
+msg += f"⭐ Score: {round(best['score'],2)}\n\n"
+
+msg += "✈️ TOP 5 OPZIONI:\n"
+
+for r in results_sorted[:5]:
+    msg += f"- {r['dest']} ({r['route']}): {r['price']} € | score {round(r['score'],1)}\n"
+
+msg += "\n🧭 Consiglio: Capodanno = prezzi alti, controlla spesso 📈"
+
+send(msg)
