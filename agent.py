@@ -9,33 +9,33 @@ def send_message(text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": CHAT_ID, "text": text})
 
-# leggi configurazione
+# carica configurazione
 with open("config.json", "r") as f:
     config = json.load(f)
 
 airports = config["airports"]
 destinations = config["destinations"]
 
-# SIMULAZIONE RICERCA VOLI (per ora gratis e funzionante)
-# 👉 dopo la sostituiamo con dati reali
-best_flights = [
-    {"route": "BLQ → ZTH", "price": 92},
-    {"route": "VRN → CFU", "price": 105},
-    {"route": "BGY → HER", "price": 118},
-]
+# -----------------------------
+# VOLI (PER ORA: DATI REALI NON ANCORA COLLEGATI)
+# -----------------------------
 
-# trova il migliore
-best = min(best_flights, key=lambda x: x["price"])
+def get_mock_flights():
+    return [
+        {"route": "BLQ → ZTH", "price": 92},
+        {"route": "VRN → CFU", "price": 105},
+        {"route": "BGY → HER", "price": 118},
+    ]
 
-message = f"""✈️ Travel Agent Report
+flights = get_mock_flights()
 
-🏆 Miglior offerta:
-{best['route']} — {best['price']} €
+best = min(flights, key=lambda x: x["price"])
 
-📊 Alternative:
-"""
+message = "✈️ Travel Agent Report\n\n"
+message += f"🏆 Miglior offerta:\n{best['route']} — {best['price']} €\n\n"
+message += "📊 Alternative:\n"
 
-for f in best_flights:
+for f in flights:
     message += f"- {f['route']}: {f['price']} €\n"
 
 send_message(message)
