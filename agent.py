@@ -113,18 +113,36 @@ def advice(best):
     else:
         return "🔴 NON PRIORITARIO ORA"
 
+# ----------------------------
+# OUTPUT MIGLIORATO (leggibile)
+# ----------------------------
+
 msg = "🎆 CAPODANNO TRAVEL RADAR PRO 2026/2027\n\n"
 
-msg += f"🏆 MIGLIOR SCELTA:\n{best['dest']} ({best['route']})\n"
-msg += f"💰 Prezzo stimato: {best['price']} € (range)\n"
-msg += f"⭐ Score: {round(best['score'],2)}\n"
-msg += f"🧭 Consiglio: {advice(best)}\n\n"
+# 🏆 TOP 1
+msg += f"🏆 MIGLIOR SCELTA ASSOLUTA:\n"
+msg += f"{best['name']} ({best['route']})\n"
+msg += f"💰 Prezzo stimato: {best['price']} €\n"
+msg += f"⭐ Score: {round(best['score'],2)}\n\n"
 
-msg += "📊 TOP DESTINAZIONI:\n"
+# ✈️ PER AEROPORTO
+msg += "✈️ MIGLIORI OPZIONI PER AEROPORTO:\n"
 
-for r in sorted(results, key=lambda x: x["score"], reverse=True):
-    msg += f"- {r['dest']}: {r['price']} € | {r['trend']} | score {round(r['score'],1)}\n"
+for o in airports:
+    msg += f"\n📍 Da {o}:\n"
 
-msg += "\n✈️ Nota: Capodanno = prezzi in rapido aumento → controlla spesso"
+    subset = [r for r in results if r["route"].startswith(o + "->")]
+    subset = sorted(subset, key=lambda x: x["score"], reverse=True)[:3]
 
-send(msg)
+    for r in subset:
+        msg += f"- {r['dest']}: {r['price']} € | score {round(r['score'],1)}\n"
+
+# 🏆 TOP 5 GLOBALI
+msg += "\n🏆 TOP 5 COMPLESSIVO:\n"
+
+top5 = sorted(results, key=lambda x: x["score"], reverse=True)[:5]
+
+for r in top5:
+    msg += f"- {r['dest']} ({r['route']}): {r['price']} € | score {round(r['score'],1)}\n"
+
+msg += "\n🧭 Consiglio: Capodanno = prenota presto, i prezzi salgono rapidamente 📈"
