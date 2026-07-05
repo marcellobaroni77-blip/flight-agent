@@ -1,9 +1,9 @@
 import os
 import json
 import requests
-from datetime import datetime
-import random
 import csv
+import random
+from datetime import datetime
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -18,17 +18,28 @@ with open("config.json", "r") as f:
 airports = config["airports"]
 destinations = config["destinations"]
 
-FILE = "prices.csv"
+FILE = "history.csv"
 
 # ----------------------------
-# prezzo simulato realistico
+# RANGE REALISTICO (non random puro)
+# simula prezzi reali low-cost europei
 # ----------------------------
-def generate_price(origin, dest):
-    base = 60 + (len(origin) * 7) + (len(dest) * 6)
-    return max(45, base + random.randint(-20, 40))
+def get_market_price(origin, dest):
+    base_map = {
+        "BLQ": 70, "VRN": 75, "VCE": 80, "BGY": 65, "MXP": 85
+    }
+
+    dest_factor = {
+        "ZTH": 40, "CFU": 50, "HER": 60, "JTR": 70
+    }
+
+    base = base_map.get(origin, 80) + dest_factor.get(dest, 60)
+    variation = random.randint(-20, 45)
+
+    return max(49, base + variation)
 
 # ----------------------------
-# storico prezzi
+# storico
 # ----------------------------
 history = {}
 if os.path.exists(FILE):
@@ -43,28 +54,26 @@ for o in airports[:3]:
     for d in destinations[:3]:
 
         route = f"{o}->{d}"
-        price = generate_price(o, d)
-        old_price = history.get(route)
+        price = get_market_price(o, d)
+        old = history.get(route)
 
-        # ----------------------------
-        # LOGICA DECISIONALE
-        # ----------------------------
-        if old_price is None:
-            decision = "🆕 nuovo monitoraggio"
+        # analisi trend
+        if old is None:
+            signal = "🆕 nuovo monitoraggio"
         else:
-            diff = price - old_price
+            diff = price - old
 
-            if diff <= -10:
-                decision = "🟢 conviene aspettare"
-            elif diff >= 10:
-                decision = "🔴 possibile momento di prenotare"
+            if diff <= -15:
+                signal = "🟢 buon momento (in calo)"
+            elif diff >= 15:
+                signal = "🔴 possibile aumento"
             else:
-                decision = "🟡 stabile"
+                signal = "🟡 stabile"
 
         flights.append({
             "route": route,
             "price": price,
-            "decision": decision
+            "signal": signal
         })
 
         history[route] = price
@@ -77,13 +86,13 @@ with open(FILE, "w", newline="") as f:
 
 best = min(flights, key=lambda x: x["price"])
 
-msg = "✈️ Travel Agent AI Report\n\n"
-msg += f"🏆 MIGLIORE OFFERTA:\n{best['route']} — {best['price']} €\n\n"
+msg = "✈️ Travel Radar Report\n\n"
+msg += f"🏆 MIGLIOR OPPORTUNITÀ:\n{best['route']} — {best['price']} €\n\n"
 
-msg += "📊 ANALISI:\n"
+msg += "📊 ANALISI ROTTE:\n"
 for f in sorted(flights, key=lambda x: x["price"]):
-    msg += f"- {f['route']}: {f['price']} € {f['decision']}\n"
+    msg += f"- {f['route']}: {f['price']} € {f['signal']}\n"
 
-msg += "\n🤖 Consiglio automatico attivo"
+msg += "\n💡 Consiglio: monitora le rotte 🟢 e attendi cali sotto 70€"
 
 send_message(msg)
