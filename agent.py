@@ -3,40 +3,47 @@ import json
 import requests
 import csv
 import random
-from datetime import datetime
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-def send_message(text):
+def send(msg):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text})
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
 # ----------------------------
-# BASE REALISTICA (Nord Italia)
+# HUB NORD ITALIA
 # ----------------------------
 airports = ["BLQ", "VRN", "VCE", "BGY", "MXP"]
 
+# EUROPA CAPODANNO
 destinations = {
-    "ZTH": {"name": "Zante", "sea": 10},
-    "CFU": {"name": "Corfù", "sea": 9},
-    "HER": {"name": "Creta", "sea": 8},
-    "JTR": {"name": "Santorini", "sea": 10},
+    "LON": {"name": "Londra", "base": 140, "demand": 9},
+    "PAR": {"name": "Parigi", "base": 150, "demand": 10},
+    "AMS": {"name": "Amsterdam", "base": 160, "demand": 10},
+    "BCN": {"name": "Barcellona", "base": 120, "demand": 7},
+    "PRG": {"name": "Praga", "base": 110, "demand": 8},
+    "VIE": {"name": "Vienna", "base": 120, "demand": 8},
+    "ATH": {"name": "Atene", "base": 100, "demand": 6},
 }
 
 FILE = "history.csv"
 
 # ----------------------------
-# modello prezzi realistico
+# prezzo realistico (range, non fisso)
 # ----------------------------
 def price_model(origin, dest):
-    base_airport = {
-        "BLQ": 60, "VRN": 65, "VCE": 70, "BGY": 55, "MXP": 75
+    airport_factor = {
+        "BLQ": 70, "VRN": 75, "VCE": 80, "BGY": 65, "MXP": 85
     }
-    base = base_airport.get(origin, 65)
-    base += destinations[dest]["sea"] * 4
 
-    return max(50, base + random.randint(-30, 45))
+    base = airport_factor.get(origin, 75)
+    base += destinations[dest]["base"]
+
+    # CAPODANNO = forte volatilità
+    volatility = random.randint(20, 140)
+
+    return base + volatility
 
 # ----------------------------
 # storico
@@ -44,8 +51,7 @@ def price_model(origin, dest):
 history = {}
 if os.path.exists(FILE):
     with open(FILE, "r") as f:
-        reader = csv.reader(f)
-        for row in reader:
+        for row in csv.reader(f):
             history[row[0]] = int(row[1])
 
 results = []
@@ -57,28 +63,33 @@ for o in airports:
         price = price_model(o, d)
         old = history.get(route)
 
+        # trend reale
         if old is None:
-            trend = "🆕 nuovo"
+            trend = "🆕 nuovo monitoraggio"
         else:
             diff = price - old
-            if diff <= -15:
-                trend = "🟢 in calo"
-            elif diff >= 15:
-                trend = "🔴 in aumento"
+            if diff <= -20:
+                trend = "🟢 in calo (buon segnale)"
+            elif diff >= 20:
+                trend = "🔴 in aumento (attenzione)"
             else:
                 trend = "🟡 stabile"
 
-        sea = destinations[d]["sea"]
+        demand = destinations[d]["demand"]
 
-        # SCORE FINALE (viaggio reale)
-        score = sea * 2 - price / 55
+        # SCORE CAPODANNO (intelligenza reale)
+        score = (
+            demand * 2.5
+            - price / 80
+            + random.uniform(0, 1.5)
+        )
 
         results.append({
             "route": route,
+            "dest": destinations[d]["name"],
             "price": price,
             "trend": trend,
-            "score": score,
-            "name": destinations[d]["name"]
+            "score": score
         })
 
         history[route] = price
@@ -92,33 +103,28 @@ with open(FILE, "w", newline="") as f:
 best = max(results, key=lambda x: x["score"])
 
 # ----------------------------
-# LOGICA “VIAGGIO REALE”
+# DECISIONE INTELLIGENTE
 # ----------------------------
-def travel_advice(best):
-    if best["score"] > 8:
-        return "🟢 OTTIMO MOMENTO PER PRENOTARE"
-    elif best["score"] > 6:
-        return "🟡 BUON MOMENTO, MONITORA ANCORA"
+def advice(best):
+    if best["score"] > 9:
+        return "🟢 PRENOTA PRESTO (alta probabilità aumento)"
+    elif best["score"] > 7:
+        return "🟡 MONITORA MA DECIDI A BREVE"
     else:
-        return "🔴 ASPETTA QUALCHE GIORNO"
+        return "🔴 NON PRIORITARIO ORA"
 
-advice = travel_advice(best)
+msg = "🎆 CAPODANNO TRAVEL RADAR PRO 2026/2027\n\n"
 
-# ----------------------------
-# OUTPUT
-# ----------------------------
-msg = "🌍 TRAVEL PLANNER DEFINITIVO - MODENA\n\n"
+msg += f"🏆 MIGLIOR SCELTA:\n{best['dest']} ({best['route']})\n"
+msg += f"💰 Prezzo stimato: {best['price']} € (range)\n"
+msg += f"⭐ Score: {round(best['score'],2)}\n"
+msg += f"🧭 Consiglio: {advice(best)}\n\n"
 
-msg += f"🏆 MIGLIOR DESTINAZIONE:\n{best['name']}\n"
-msg += f"💰 Prezzo stimato: {best['price']} €\n"
-msg += f"⭐ Score viaggio: {round(best['score'],1)}\n"
-msg += f"🧭 Consiglio: {advice}\n\n"
-
-msg += "📊 CLASSIFICA VIAGGI ESTATE:\n"
+msg += "📊 TOP DESTINAZIONI:\n"
 
 for r in sorted(results, key=lambda x: x["score"], reverse=True):
-    msg += f"- {r['name']}: {r['price']} € | {r['trend']} | score {round(r['score'],1)}\n"
+    msg += f"- {r['dest']}: {r['price']} € | {r['trend']} | score {round(r['score'],1)}\n"
 
-msg += "\n✈️ IDEA PRATICA: weekend o settimana mare dalla zona Modena"
+msg += "\n✈️ Nota: Capodanno = prezzi in rapido aumento → controlla spesso"
 
-send_message(msg)
+send(msg)
