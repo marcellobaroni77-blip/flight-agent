@@ -3,7 +3,6 @@ import json
 import requests
 import csv
 import random
-from datetime import datetime
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -21,25 +20,26 @@ destinations = config["destinations"]
 FILE = "history.csv"
 
 # ----------------------------
-# RANGE REALISTICO (non random puro)
-# simula prezzi reali low-cost europei
+# PROFILO DESTINAZIONI (logica viaggio reale)
 # ----------------------------
-def get_market_price(origin, dest):
-    base_map = {
-        "BLQ": 70, "VRN": 75, "VCE": 80, "BGY": 65, "MXP": 85
-    }
+destination_profile = {
+    "ZTH": {"sea": 10, "crowd": 6},
+    "CFU": {"sea": 9, "crowd": 7},
+    "HER": {"sea": 8, "crowd": 8},
+    "JTR": {"sea": 10, "crowd": 9}
+}
 
-    dest_factor = {
-        "ZTH": 40, "CFU": 50, "HER": 60, "JTR": 70
-    }
+airport_penalty = {
+    "BLQ": 5, "VRN": 6, "VCE": 4, "BGY": 3, "MXP": 2
+}
 
-    base = base_map.get(origin, 80) + dest_factor.get(dest, 60)
-    variation = random.randint(-20, 45)
-
-    return max(49, base + variation)
+def market_price(o, d):
+    base = 60 + airport_penalty.get(o, 5) * 5
+    base += destination_profile.get(d, {"sea": 7})["sea"] * 4
+    return max(55, base + random.randint(-25, 40))
 
 # ----------------------------
-# storico
+# storico prezzi
 # ----------------------------
 history = {}
 if os.path.exists(FILE):
@@ -48,32 +48,36 @@ if os.path.exists(FILE):
         for row in reader:
             history[row[0]] = int(row[1])
 
-flights = []
+results = []
 
 for o in airports[:3]:
     for d in destinations[:3]:
 
         route = f"{o}->{d}"
-        price = get_market_price(o, d)
+        price = market_price(o, d)
         old = history.get(route)
 
-        # analisi trend
+        # trend
         if old is None:
-            signal = "🆕 nuovo monitoraggio"
+            trend = "🆕 nuovo"
         else:
             diff = price - old
-
-            if diff <= -15:
-                signal = "🟢 buon momento (in calo)"
-            elif diff >= 15:
-                signal = "🔴 possibile aumento"
+            if diff < -15:
+                trend = "🟢 in calo"
+            elif diff > 15:
+                trend = "🔴 in aumento"
             else:
-                signal = "🟡 stabile"
+                trend = "🟡 stabile"
 
-        flights.append({
+        # punteggio destinazione (qui nasce l'intelligenza)
+        sea_score = destination_profile.get(d, {"sea": 7})["sea"]
+        score = sea_score - (price / 50)
+
+        results.append({
             "route": route,
             "price": price,
-            "signal": signal
+            "trend": trend,
+            "score": score
         })
 
         history[route] = price
@@ -84,15 +88,20 @@ with open(FILE, "w", newline="") as f:
     for k, v in history.items():
         writer.writerow([k, v])
 
-best = min(flights, key=lambda x: x["price"])
+# migliore destinazione
+best = max(results, key=lambda x: x["score"])
 
-msg = "✈️ Travel Radar Report\n\n"
-msg += f"🏆 MIGLIOR OPPORTUNITÀ:\n{best['route']} — {best['price']} €\n\n"
+msg = "✈️ TRAVEL ASSISTANT REPORT\n\n"
+
+msg += f"🏆 MIGLIOR SCELTA OGGI:\n{best['route']}\n"
+msg += f"💰 Prezzo stimato: {best['price']} €\n"
+msg += f"⭐ Qualità viaggio: {round(best['score'],1)}\n\n"
 
 msg += "📊 ANALISI ROTTE:\n"
-for f in sorted(flights, key=lambda x: x["price"]):
-    msg += f"- {f['route']}: {f['price']} € {f['signal']}\n"
 
-msg += "\n💡 Consiglio: monitora le rotte 🟢 e attendi cali sotto 70€"
+for r in sorted(results, key=lambda x: x["score"], reverse=True):
+    msg += f"- {r['route']}: {r['price']} € | {r['trend']} | score {round(r['score'],1)}\n"
+
+msg += "\n🧭 Consiglio: scegli la rotta con score più alto, non solo il prezzo"
 
 send_message(msg)
