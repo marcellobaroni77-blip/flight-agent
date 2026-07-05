@@ -3,6 +3,7 @@ import json
 import requests
 import csv
 import random
+from datetime import datetime
 
 TOKEN = os.environ["TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
@@ -11,34 +12,30 @@ def send_message(text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     requests.post(url, data={"chat_id": CHAT_ID, "text": text})
 
-with open("config.json", "r") as f:
-    config = json.load(f)
+# ----------------------------
+# BASE REALISTICA (Nord Italia)
+# ----------------------------
+airports = ["BLQ", "VRN", "VCE", "BGY", "MXP"]
 
-airports = config["airports"]
-destinations = config["destinations"]
+destinations = {
+    "ZTH": {"name": "Zante", "sea": 10},
+    "CFU": {"name": "Corfù", "sea": 9},
+    "HER": {"name": "Creta", "sea": 8},
+    "JTR": {"name": "Santorini", "sea": 10},
+}
 
 FILE = "history.csv"
 
 # ----------------------------
-# PROFILO DESTINAZIONI (logica viaggio reale)
+# modello prezzi realistico
 # ----------------------------
-destination_profile = {
-    "ZTH": {"sea": 10, "crowd": 6, "type": "sea"},
-    "CFU": {"sea": 9, "crowd": 7, "type": "sea"},
-    "HER": {"sea": 8, "crowd": 8, "type": "sea"},
-    "JTR": {"sea": 10, "crowd": 9, "type": "sea"}
-}
+def price_model(origin, dest):
+    base_airport = {
+        "BLQ": 60, "VRN": 65, "VCE": 70, "BGY": 55, "MXP": 75
+    }
+    base = base_airport.get(origin, 65)
+    base += destinations[dest]["sea"] * 4
 
-airport_score = {
-    "BLQ": 6, "VRN": 6.5, "VCE": 7, "BGY": 7.5, "MXP": 8
-}
-
-# ----------------------------
-# prezzo realistico simulato (mercato)
-# ----------------------------
-def get_price(o, d):
-    base = 55 + (airport_score.get(o, 6) * 5)
-    base += destination_profile.get(d, {"sea": 7})["sea"] * 4
     return max(50, base + random.randint(-30, 45))
 
 # ----------------------------
@@ -53,14 +50,13 @@ if os.path.exists(FILE):
 
 results = []
 
-for o in airports[:3]:
-    for d in destinations[:3]:
+for o in airports:
+    for d in destinations:
 
         route = f"{o}->{d}"
-        price = get_price(o, d)
+        price = price_model(o, d)
         old = history.get(route)
 
-        # trend
         if old is None:
             trend = "🆕 nuovo"
         else:
@@ -72,21 +68,17 @@ for o in airports[:3]:
             else:
                 trend = "🟡 stabile"
 
-        profile = destination_profile.get(d, {"sea": 7, "crowd": 7})
+        sea = destinations[d]["sea"]
 
-        # SCORE INTELLIGENTE
-        score = (
-            profile["sea"] * 2
-            - profile["crowd"] * 0.5
-            - price / 40
-            + airport_score.get(o, 6)
-        )
+        # SCORE FINALE (viaggio reale)
+        score = sea * 2 - price / 55
 
         results.append({
             "route": route,
             "price": price,
             "trend": trend,
-            "score": score
+            "score": score,
+            "name": destinations[d]["name"]
         })
 
         history[route] = price
@@ -97,20 +89,36 @@ with open(FILE, "w", newline="") as f:
     for k, v in history.items():
         writer.writerow([k, v])
 
-# migliore scelta
 best = max(results, key=lambda x: x["score"])
 
-msg = "🌍 TRAVEL PLANNER AI REPORT\n\n"
+# ----------------------------
+# LOGICA “VIAGGIO REALE”
+# ----------------------------
+def travel_advice(best):
+    if best["score"] > 8:
+        return "🟢 OTTIMO MOMENTO PER PRENOTARE"
+    elif best["score"] > 6:
+        return "🟡 BUON MOMENTO, MONITORA ANCORA"
+    else:
+        return "🔴 ASPETTA QUALCHE GIORNO"
 
-msg += f"🏆 MIGLIORE DESTINAZIONE OGGI:\n{best['route']}\n"
+advice = travel_advice(best)
+
+# ----------------------------
+# OUTPUT
+# ----------------------------
+msg = "🌍 TRAVEL PLANNER DEFINITIVO - MODENA\n\n"
+
+msg += f"🏆 MIGLIOR DESTINAZIONE:\n{best['name']}\n"
 msg += f"💰 Prezzo stimato: {best['price']} €\n"
-msg += f"⭐ Score viaggio: {round(best['score'],1)}\n\n"
+msg += f"⭐ Score viaggio: {round(best['score'],1)}\n"
+msg += f"🧭 Consiglio: {advice}\n\n"
 
-msg += "📊 CLASSIFICA COMPLETA:\n"
+msg += "📊 CLASSIFICA VIAGGI ESTATE:\n"
 
 for r in sorted(results, key=lambda x: x["score"], reverse=True):
-    msg += f"- {r['route']}: {r['price']} € | {r['trend']} | score {round(r['score'],1)}\n"
+    msg += f"- {r['name']}: {r['price']} € | {r['trend']} | score {round(r['score'],1)}\n"
 
-msg += "\n🧭 Consiglio: scegli sempre la destinazione con score più alto, non solo il prezzo"
+msg += "\n✈️ IDEA PRATICA: weekend o settimana mare dalla zona Modena"
 
 send_message(msg)
